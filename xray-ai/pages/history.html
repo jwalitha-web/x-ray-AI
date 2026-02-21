@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scan History — X-Ray AI</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🫁</text></svg>" />
+</head>
+
+<body>
+  <div class="app-shell" id="app-shell"></div>
+
+  <script type="module">
+    import { renderShell } from "../js/shell.js";
+    import { getSession, fmtDate, riskLevel, downloadReport, toast, saveScanResult } from "../js/utils.js";
+    import { getUserScans } from "../js/firestore.js";
+
+    const PAGE_SIZE = 10;
+    let allScans = [], currentPage = 1, userProfile = null;
+
+    async function init() {
+      const user = getSession();
+      if (!user) { window.location.href = "../index.html"; return; }
+      if (user.role !== "doctor") { window.location.href = "dashboard.html"; return; }
+
+      userProfile = user;
+      renderShell("nav-history", "My Scan History");
+      const body = document.getElementById("page-body");
+
+      body.innerHTML = `
+      <div class="page-heading">
+        <h2>📋 My Scan History</h2>
+        <p>All your past chest X-ray screenings</p>
+      </div>
+      <div class="disclaimer">
+        <span class="disc-icon">⚠️</span>
+        AI-generated results are for screening purposes only and do not constitute a clinical diagnosis.
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-icon">📁</span>
+          <h3>Past Scans</h3>
+          <button class="btn btn-blue btn-sm" style="margin-left:auto" onclick="navigate('upload.html')">+ New Scan</button>
+        </div>
+        <div class="card-body" style="padding:0">
+          <div id="scans-table-wrap">
+            <div class="spinner-wrap"><div class="spinner"></div><p>Loading history…</p></div>
+          </div>
+          <div class="pagination" id="pagination"></div>
+        </div>
+      </div>
+    `;
+
+      try {
+        allScans = await getUserScans(user.uid);
+        renderPage(1);
+      } catch (err) {
+        document.getElementById("scans-table-wrap").innerHTML =
+          `<div class="empty-state"><div class="empty-icon">⚠️</div><p>Could not load scans: ${err.message}</p></div>`;
+      }
+    }
+
+    function riskBadge(p) {
+      const rl = riskLevel(p);
+      const labels = { high: "HIGH", moderate: "MODERATE", low: "LOW" };
+      return `<span class="risk-badge risk-${rl}" style="font-size:0.75rem"><span class="risk-dot"></span>${labels[rl]}</span>`;
+    }
+
+    function renderPage(page) {
+      currentPage = page;
+      const start = (page - 1) * PAGE_SIZE, end = start + PAGE_SIZE;
+      const scans = allScans.slice(start, end);
+      const totalPages = Math.ceil(allScans.length / PAGE_SIZE);
+      const wrap = document.getElementById("scans-table-wrap");
+
+      if (!scans.length) {
+        wrap.innerHTML = `
+        <div class="empty-state" style="padding:60px">
+          <div class="empty-icon">📂</div>
+          <h3>No scans yet</h3>
+          <p>Upload your first chest X-ray to see results here.</p>
+          <button class="btn btn-blue" style="margin-top:16px" onclick="navigate('upload.html')">Upload Now</button>
+        </div>`;
+        return;
+      }
+
+      wrap.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>#</th><th>Image</th><th>Date & Time</th><th>Top Finding</th><th>Risk Level</th><th style="text-align:right">Actions</th>
+          </tr></thead>
+          <tbody>
+            ${scans.map((s, i) => `
+              <tr>
+                <td style="color:var(--text-muted);font-weight:600">${start + i + 1}</td>
+                <td>${s.imageURL ? `<img class="thumb-img" src="${s.imageURL}" alt="scan"/>` : `<div class="no-img">🫁</div>`}</td>
+                <td style="font-size:0.82rem">${fmtDate(s.createdAt)}</td>
+                <td><strong>${s.highestRiskDisease || "—"}</strong><br><span style="font-size:0.78rem;color:var(--text-muted)">${((s.highestRisk || 0) * 100).toFixed(1)}%</span></td>
+                <td>${riskBadge(s.highestRisk || 0)}</td>
+                <td style="text-align:right">
+                  <button class="btn btn-outline btn-sm" style="margin-right:6px" onclick="viewScan('${s.id}')">View</button>
+                  <button class="btn btn-green btn-sm" onclick="downloadPDF('${s.id}')">PDF</button>
+                </td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>`;
+
+      const pag = document.getElementById("pagination");
+      if (totalPages <= 1) { pag.innerHTML = ""; return; }
+      pag.innerHTML = Array.from({ length: totalPages }, (_, i) =>
+        `<button class="page-btn ${i + 1 === page ? "active" : ""}" onclick="goPage(${i + 1})">${i + 1}</button>`
+      ).join("");
+    }
+
+    window.viewScan = (id) => {
+      sessionStorage.setItem("xray_view_scan_id", id);
+      window.location.href = "results.html";
+    };
+
+    window.downloadPDF = (id) => {
+      const scan = allScans.find(s => s.id === id);
+      if (!scan) { toast("Scan not found.", "error"); return; }
+      try { downloadReport(scan, userProfile); toast("Report downloaded!", "success"); }
+      catch (e) { toast("PDF error: " + e.message, "error"); }
+    };
+
+    window.goPage = (p) => renderPage(p);
+
+    init();
+  </script>
+</body>
+
+</html>

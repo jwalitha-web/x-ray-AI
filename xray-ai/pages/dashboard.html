@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard — X-Ray AI</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🫁</text></svg>" />
+</head>
+
+<body>
+  <div class="app-shell" id="app-shell"></div>
+
+  <script type="module">
+    import { renderShell } from "../js/shell.js";
+    import { getSession, fmtDate, riskLevel, saveSession } from "../js/utils.js";
+    import { getUserScans } from "../js/firestore.js";
+    import { getUserProfile } from "../js/auth.js";
+
+    async function init() {
+      let user = getSession();
+      if (!user) { window.location.href = "../index.html"; return; }
+      // Refresh profile if needed
+      if (!user.name) {
+        const profile = await getUserProfile(user.uid);
+        if (!profile) { window.location.href = "../index.html"; return; }
+        saveSession(profile); user = profile;
+      }
+
+      renderShell("nav-dashboard", "Dashboard");
+      const body = document.getElementById("page-body");
+
+      body.innerHTML = `
+      <div class="page-heading">
+        <h2>👋 Welcome back, ${user.name.split(" ")[0]}!</h2>
+        <p>Here's an overview of your X-Ray screening activity</p>
+      </div>
+      <div class="disclaimer">
+        <span class="disc-icon">⚠️</span>
+        This is an AI screening tool, not a medical diagnosis. Always consult a qualified physician for clinical decisions.
+      </div>
+      <div class="stats-grid" id="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon blue">📁</div>
+          <div>
+            <div class="stat-value" id="stat-total">—</div>
+            <div class="stat-label">Total Scans</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon red">🔴</div>
+          <div>
+            <div class="stat-value" id="stat-high">—</div>
+            <div class="stat-label">High-Risk Findings</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon amber">🟡</div>
+          <div>
+            <div class="stat-value" id="stat-mod">—</div>
+            <div class="stat-label">Moderate-Risk</div>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green">✅</div>
+          <div>
+            <div class="stat-value" id="stat-low">—</div>
+            <div class="stat-label">Low-Risk Findings</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px;" class="dash-grid">
+        <div class="card" style="grid-column:span 2">
+          <div class="card-header">
+            <span class="card-icon">🕑</span>
+            <h3>Recent Scans</h3>
+            ${user.role === "doctor" ? `<button class="btn btn-blue btn-sm" style="margin-left:auto" onclick="navigate('history.html')">View All</button>` : ""}
+          </div>
+          <div class="card-body" id="recent-scans-body">
+            <div class="spinner-wrap"><div class="spinner"></div><p>Loading…</p></div>
+          </div>
+        </div>
+      </div>
+
+      ${user.role === "doctor" ? `
+      <div style="text-align:center;padding:20px 0;">
+        <button class="btn btn-blue" style="padding:14px 36px;font-size:1rem" onclick="navigate('upload.html')">
+          📤 Upload New X-Ray
+        </button>
+      </div>` : ""}
+    `;
+
+      // Load scans (only for doctors — admins see their own admin panel)
+      if (user.role === "doctor") {
+        try {
+          const allScans = await getUserScans(user.uid);
+          const totalScans = allScans.length;
+          const highCount = allScans.filter(s => riskLevel(s.highestRisk) === "high").length;
+          const modCount = allScans.filter(s => riskLevel(s.highestRisk) === "moderate").length;
+          const lowCount = allScans.filter(s => riskLevel(s.highestRisk) === "low").length;
+
+          document.getElementById("stat-total").textContent = totalScans;
+          document.getElementById("stat-high").textContent = highCount;
+          document.getElementById("stat-mod").textContent = modCount;
+          document.getElementById("stat-low").textContent = lowCount;
+
+          const recent = allScans.slice(0, 5);
+          renderRecentScans(recent);
+        } catch (err) {
+          console.error(err);
+          document.getElementById("recent-scans-body").innerHTML =
+            `<div class="empty-state"><div class="empty-icon">⚠️</div><p>Could not load data. Check Firebase config.</p></div>`;
+        }
+      } else {
+        // Admin — show plain counts placeholder
+        ["stat-total", "stat-high", "stat-mod", "stat-low"].forEach(id => {
+          document.getElementById(id).textContent = "—";
+        });
+        document.getElementById("recent-scans-body").innerHTML =
+          `<div class="empty-state"><div class="empty-icon">🛡️</div><h3>Admin Account</h3><p>Visit the Admin Panel to view all scans.</p></div>`;
+      }
+    }
+
+    function riskBadge(p) {
+      const rl = riskLevel(p);
+      const labels = { high: "HIGH", moderate: "MODERATE", low: "LOW" };
+      return `<span class="risk-badge risk-${rl}"><span class="risk-dot"></span>${labels[rl]}</span>`;
+    }
+
+    function renderRecentScans(scans) {
+      const body = document.getElementById("recent-scans-body");
+      if (!scans.length) {
+        body.innerHTML = `<div class="empty-state"><div class="empty-icon">📂</div><h3>No scans yet</h3><p>Upload your first X-ray to get started.</p></div>`;
+        return;
+      }
+      body.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Image</th><th>Date</th><th>Highest Risk Disease</th><th>Risk Level</th><th>Action</th>
+          </tr></thead>
+          <tbody>
+            ${scans.map(s => `
+              <tr>
+                <td>${s.imageURL ? `<img class="thumb-img" src="${s.imageURL}" alt="X-Ray"/>` : `<div class="no-img">🫁</div>`}</td>
+                <td>${fmtDate(s.createdAt)}</td>
+                <td><strong>${s.highestRiskDisease || "—"}</strong></td>
+                <td>${riskBadge(s.highestRisk || 0)}</td>
+                <td>
+                  <button class="btn btn-outline btn-sm" onclick="viewResults('${s.id}')">View Results</button>
+                </td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
+      </div>`;
+    }
+
+    window.viewResults = (scanId) => {
+      sessionStorage.setItem("xray_view_scan_id", scanId);
+      window.location.href = "results.html";
+    };
+
+    init();
+  </script>
+</body>
+
+</html>

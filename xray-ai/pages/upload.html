@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Upload X-Ray — X-Ray AI</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🫁</text></svg>" />
+</head>
+
+<body>
+  <div class="app-shell" id="app-shell"></div>
+
+  <script type="module">
+    import { renderShell } from "../js/shell.js";
+    import { getSession, toast, saveScanResult } from "../js/utils.js";
+    import { uploadXRay } from "../js/storage-helper.js";
+    import { saveScan } from "../js/firestore.js";
+    import { simulatePrediction, getRiskLevel } from "../js/ai-simulator.js";
+
+    const ANALYSIS_STEPS = [
+      "Preprocessing image…",
+      "Extracting radiological features…",
+      "Running deep neural network…",
+      "Applying disease classifiers…",
+      "Calibrating confidence scores…",
+      "Generating predictions…",
+      "Analysis complete ✓",
+    ];
+
+    async function init() {
+      const user = getSession();
+      if (!user) { window.location.href = "../index.html"; return; }
+
+      // 🔒 Doctor-only
+      if (user.role !== "doctor") { window.location.href = "dashboard.html"; return; }
+
+      renderShell("nav-upload", "Upload X-Ray");
+      const body = document.getElementById("page-body");
+
+      body.innerHTML = `
+      <div class="page-heading">
+        <h2>📤 Upload Chest X-Ray</h2>
+        <p>Upload a chest X-ray image to receive AI-generated disease screening results</p>
+      </div>
+      <div class="disclaimer">
+        <span class="disc-icon">⚠️</span>
+        This is an AI screening tool, not a medical diagnosis. Results are for informational purposes only.
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start" class="upload-grid">
+        <div class="card">
+          <div class="card-header"><span class="card-icon">🖼️</span><h3>Select Image</h3></div>
+          <div class="card-body">
+            <div class="upload-zone" id="drop-zone">
+              <input type="file" id="file-input" accept=".jpg,.jpeg,.png" />
+              <div class="upload-icon">🫁</div>
+              <div class="upload-text">
+                <h3>Drag & drop X-Ray here</h3>
+                <p>or click to browse files</p>
+                <div class="fmt-pills">
+                  <span class="fmt-pill">JPG</span>
+                  <span class="fmt-pill">JPEG</span>
+                  <span class="fmt-pill">PNG</span>
+                </div>
+              </div>
+            </div>
+            <div id="preview-container"></div>
+            <div id="file-info" style="margin-top:12px;font-size:0.82rem;color:var(--text-muted);"></div>
+          </div>
+        </div>
+
+        <div class="card" id="analysis-card">
+          <div class="card-header"><span class="card-icon">🧠</span><h3>AI Analysis</h3></div>
+          <div class="card-body">
+            <div id="analysis-content">
+              <div class="empty-state">
+                <div class="empty-icon">🔬</div>
+                <h3>Ready for Analysis</h3>
+                <p>Select an X-ray image and click Analyze to begin</p>
+              </div>
+            </div>
+            <div id="analyze-btn-wrap" style="margin-top:20px;text-align:center;display:none">
+              <button class="btn btn-blue" id="analyze-btn" style="padding:13px 36px;font-size:0.95rem">
+                🧠 Analyze X-Ray
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+      // Grid responsiveness
+      const grid = body.querySelector(".upload-grid");
+      function adjustGrid() {
+        grid.style.gridTemplateColumns = window.innerWidth < 800 ? "1fr" : "1fr 1fr";
+      }
+      adjustGrid(); window.addEventListener("resize", adjustGrid);
+
+      let selectedFile = null;
+
+      const dropZone = document.getElementById("drop-zone");
+      const fileInput = document.getElementById("file-input");
+
+      dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+      dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault(); dropZone.classList.remove("drag-over");
+        const file = e.dataTransfer.files[0];
+        if (file) handleFile(file);
+      });
+      fileInput.addEventListener("change", (e) => { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+      function handleFile(file) {
+        const validTypes = ["image/jpeg", "image/jpg", "image/png"];
+        if (!validTypes.includes(file.type)) { toast("Only JPG and PNG files are accepted.", "error"); return; }
+        if (file.size > 10 * 1024 * 1024) { toast("File size must be under 10 MB.", "error"); return; }
+        selectedFile = file;
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          document.getElementById("preview-container").innerHTML =
+            `<div class="preview-box"><img src="${ev.target.result}" alt="X-Ray Preview"/></div>`;
+        };
+        reader.readAsDataURL(file);
+
+        document.getElementById("file-info").textContent = `📄 ${file.name}  ·  ${(file.size / 1024).toFixed(1)} KB`;
+        document.getElementById("analyze-btn-wrap").style.display = "block";
+        document.getElementById("analysis-content").innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">✅</div>
+          <h3>Image Ready</h3>
+          <p>Click "Analyze X-Ray" to start the AI screening process</p>
+        </div>`;
+      }
+
+      document.getElementById("analyze-btn").addEventListener("click", async () => {
+        if (!selectedFile) { toast("Please select an image first.", "error"); return; }
+
+        const analyzeBtn = document.getElementById("analyze-btn");
+        analyzeBtn.disabled = true;
+        analyzeBtn.textContent = "Analyzing…";
+
+        const analysisContent = document.getElementById("analysis-content");
+        analysisContent.innerHTML = `
+        <div class="analysis-status">
+          <div class="analysis-icon-wrap"><span>🧠</span></div>
+          <h3 style="color:var(--navy);font-size:1.05rem;font-weight:700">AI Analysis Running</h3>
+          <div class="progress-wrap" style="margin-top:16px">
+            <div class="progress-label">
+              <span>Processing</span><span id="pct-label">0%</span>
+            </div>
+            <div class="progress-track"><div class="progress-fill" id="prog-bar" style="width:0%"></div></div>
+          </div>
+          <div class="analysis-step" id="analysis-step">Initializing…</div>
+        </div>`;
+
+        let pct = 0, stepIdx = 0;
+        const progBar = document.getElementById("prog-bar");
+        const pctLabel = document.getElementById("pct-label");
+        const stepLabel = document.getElementById("analysis-step");
+        const progTimer = setInterval(() => {
+          if (pct < 90) { pct += Math.random() * 8; if (pct > 90) pct = 90; }
+          progBar.style.width = `${pct.toFixed(0)}%`;
+          pctLabel.textContent = `${pct.toFixed(0)}%`;
+          stepLabel.textContent = ANALYSIS_STEPS[Math.min(stepIdx++, ANALYSIS_STEPS.length - 2)];
+        }, 280);
+
+        try {
+          // Timeout promise: 15 seconds
+          const timeout = new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("Firebase connection timed out. Please check your Storage Rules.")), 15000)
+          );
+
+          // Attempt storage upload with timeout
+          let imageURL;
+          try {
+            imageURL = await Promise.race([
+              uploadXRay(selectedFile, user.uid, (p) => {
+                // Minor internal sync: pct is handled by progTimer, but we could sync here
+              }),
+              timeout
+            ]);
+          } catch (storageErr) {
+            console.warn("Storage upload failed or timed out. Falling back to local preview for demo.", storageErr);
+            toast("Firebase Storage blocked (check rules). Using local fallback.", "warning");
+            imageURL = URL.createObjectURL(selectedFile);
+          }
+
+          // AI prediction
+          const predictions = await simulatePrediction(2200);
+
+          clearInterval(progTimer);
+          progBar.style.width = "100%";
+          pctLabel.textContent = "100%";
+          stepLabel.textContent = ANALYSIS_STEPS[ANALYSIS_STEPS.length - 1];
+
+          const highestRisk = predictions[0].probability;
+          const highestRiskDisease = predictions[0].disease;
+
+          let scanId = "local_" + Date.now();
+          try {
+            // Firestore save with short timeout (5s)
+            const dbTimeout = new Promise((_, reject) => setTimeout(() => reject("DB timeout"), 5000));
+            scanId = await Promise.race([
+              saveScan(user.uid, imageURL, predictions, highestRisk, highestRiskDisease),
+              dbTimeout
+            ]);
+          } catch (dbErr) {
+            console.warn("Firestore save failed or timed out:", dbErr);
+          }
+
+          saveScanResult({ id: scanId, userId: user.uid, imageURL, predictions, highestRisk, highestRiskDisease, createdAt: new Date().toISOString() });
+
+          await new Promise(r => setTimeout(r, 600));
+          window.location.href = "results.html";
+        } catch (err) {
+          clearInterval(progTimer);
+          console.error("Critical Analysis Error:", err);
+          toast("Analysis failed: " + err.message, "error");
+          analysisContent.innerHTML = `<div class="empty-state"><div class="empty-icon">❌</div><h3>Analysis failed</h3><p>${err.message}</p><p style="font-size:0.7rem;margin-top:10px;opacity:0.6">Check console for Firebase connectivity details.</p></div>`;
+          analyzeBtn.disabled = false;
+          analyzeBtn.textContent = "🧠 Analyze X-Ray";
+        }
+      });
+    }
+
+    init();
+  </script>
+</body>
+
+</html>

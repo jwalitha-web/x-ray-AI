@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Analysis Results — X-Ray AI</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🫁</text></svg>" />
+</head>
+
+<body>
+  <div class="app-shell" id="app-shell"></div>
+
+  <script type="module">
+    import { renderShell } from "../js/shell.js";
+    import { getSession, getScanResult, fmtDate, riskLevel, downloadReport, toast } from "../js/utils.js";
+    import { getScan } from "../js/firestore.js";
+
+    async function init() {
+      const user = getSession();
+      if (!user) { window.location.href = "../index.html"; return; }
+
+      // 🔒 DOCTOR-ONLY — block admins
+      if (user.role !== "doctor") { window.location.href = "dashboard.html"; return; }
+
+      renderShell("nav-history", "Analysis Results");
+      const body = document.getElementById("page-body");
+
+      // Load scan from sessionStorage or Firestore
+      let scan = getScanResult();
+      const viewId = sessionStorage.getItem("xray_view_scan_id");
+
+      if (viewId && (!scan || scan.id !== viewId)) {
+        try { scan = await getScan(viewId); sessionStorage.removeItem("xray_view_scan_id"); }
+        catch (e) { console.warn(e); }
+      }
+
+      if (!scan || !scan.predictions) {
+        body.innerHTML = `
+        <div class="empty-state" style="padding:80px">
+          <div class="empty-icon">❌</div>
+          <h3>No results found</h3>
+          <p>Please upload an X-ray to see results.</p>
+          <button class="btn btn-blue" style="margin-top:16px" onclick="navigate('upload.html')">Upload X-Ray</button>
+        </div>`;
+        return;
+      }
+
+      const top = scan.predictions[0];
+      const rl = riskLevel(scan.highestRisk || top.probability);
+      const rlLabels = { high: "HIGH RISK", moderate: "MODERATE RISK", low: "LOW RISK" };
+      const rlClass = { high: "risk-high", moderate: "risk-moderate", low: "risk-low" };
+      const confPct = Math.round((scan.highestRisk || top.probability) * 100);
+
+      body.innerHTML = `
+      <div class="page-heading">
+        <h2>🔬 AI Analysis Results</h2>
+        <p>Chest X-ray screening completed · ${fmtDate(scan.createdAt)}</p>
+      </div>
+      <div class="disclaimer">
+        <span class="disc-icon">⚠️</span>
+        <strong>DISCLAIMER:</strong>&nbsp; This is an AI screening tool and does NOT constitute a medical diagnosis. Consult a qualified physician for all clinical decisions.
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px" class="results-main-grid">
+        <div style="display:flex;flex-direction:column;gap:20px">
+          <div class="card">
+            <div class="card-header"><span class="card-icon">🎯</span><h3>Overall Risk Assessment</h3></div>
+            <div class="card-body">
+              <div class="highlight-row">
+                <div class="hl-title">Highest Risk Finding</div>
+                <div class="hl-value">${top.disease}</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap">
+                <span class="risk-badge ${rlClass[rl]}" style="font-size:0.88rem;padding:8px 18px">
+                  <span class="risk-dot"></span>${rlLabels[rl]}
+                </span>
+                <span style="font-size:0.85rem;color:var(--text-muted)">Confidence: <strong style="color:var(--navy)">${confPct}%</strong></span>
+              </div>
+              <div class="divider"></div>
+              <div class="confidence-meter">
+                <svg width="160" height="100" viewBox="0 0 160 100">
+                  <defs>
+                    <linearGradient id="cg" x1="0%" y1="0%" x2="100%" y2="0%">
+                      <stop offset="0%" stop-color="${rl === 'high' ? '#ef4444' : rl === 'moderate' ? '#f59e0b' : '#10b981'}"/>
+                      <stop offset="100%" stop-color="${rl === 'high' ? '#f87171' : rl === 'moderate' ? '#fbbf24' : '#34d399'}"/>
+                    </linearGradient>
+                  </defs>
+                  <path d="M20,90 A60,60 0 0,1 140,90" fill="none" stroke="#e2e8f0" stroke-width="14" stroke-linecap="round"/>
+                  <path d="M20,90 A60,60 0 0,1 140,90" fill="none" stroke="url(#cg)" stroke-width="14" stroke-linecap="round"
+                    stroke-dasharray="188.5"
+                    stroke-dashoffset="${188.5 - (188.5 * confPct / 100)}"
+                    style="transition:stroke-dashoffset 1.2s cubic-bezier(.25,1,.5,1)"/>
+                  <text x="80" y="80" text-anchor="middle" font-family="Inter,sans-serif" font-size="22" font-weight="800" fill="var(--navy)">${confPct}%</text>
+                </svg>
+                <div class="conf-label">AI Confidence Score</div>
+              </div>
+            </div>
+          </div>
+
+          ${scan.imageURL ? `
+          <div class="card">
+            <div class="card-header"><span class="card-icon">🖼️</span><h3>Uploaded X-Ray</h3></div>
+            <div class="card-body" style="padding:0">
+              <div style="background:#000;max-height:280px;display:flex;align-items:center;justify-content:center;border-radius:0 0 var(--radius) var(--radius);overflow:hidden">
+                <img src="${scan.imageURL}" alt="Chest X-Ray" style="max-height:280px;object-fit:contain;width:100%;"/>
+              </div>
+            </div>
+          </div>` : ""}
+        </div>
+
+        <div class="card">
+          <div class="card-header"><span class="card-icon">📊</span><h3>Disease Probability Analysis</h3></div>
+          <div class="card-body" id="disease-bars"></div>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:32px">
+        <button class="btn btn-blue" id="pdf-btn">📄 Download PDF Report</button>
+        <button class="btn btn-outline" onclick="navigate('upload.html')">📤 Analyze Another</button>
+        <button class="btn btn-outline" onclick="navigate('history.html')">📋 View History</button>
+      </div>
+    `;
+
+      // Grid responsiveness
+      const grid = body.querySelector(".results-main-grid");
+      function adjGrid() { grid.style.gridTemplateColumns = window.innerWidth < 800 ? "1fr" : "1fr 1fr"; }
+      adjGrid(); window.addEventListener("resize", adjGrid);
+
+      // Animated disease bars
+      const barsContainer = document.getElementById("disease-bars");
+      barsContainer.innerHTML = scan.predictions.map(p => {
+        const pct = (p.probability * 100).toFixed(1);
+        const rl_d = riskLevel(p.probability);
+        return `
+        <div class="disease-bar-wrap">
+          <div class="disease-bar-label">
+            <span class="disease-name">${p.disease}</span>
+            <span class="disease-pct" style="color:${rl_d === 'high' ? '#dc2626' : rl_d === 'moderate' ? '#d97706' : '#059669'}">${pct}%</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill bar-${rl_d}" style="width:0%" data-target="${pct}%"></div>
+          </div>
+        </div>`;
+      }).join("");
+
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          document.querySelectorAll(".bar-fill[data-target]").forEach(el => {
+            el.style.width = el.dataset.target;
+          });
+        }, 100);
+      });
+
+      // PDF download
+      document.getElementById("pdf-btn").addEventListener("click", () => {
+        try { downloadReport(scan, user); toast("Report downloaded!", "success"); }
+        catch (e) { toast("PDF error: " + e.message, "error"); }
+      });
+    }
+
+    init();
+  </script>
+</body>
+
+</html>

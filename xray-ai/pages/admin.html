@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Panel — X-Ray AI</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🫁</text></svg>" />
+</head>
+
+<body>
+  <div class="app-shell" id="app-shell"></div>
+
+  <script type="module">
+    import { renderShell } from "../js/shell.js";
+    import { getSession, fmtDate, riskLevel } from "../js/utils.js";
+    import { getAllScans } from "../js/firestore.js";
+
+    const PAGE_SIZE = 15;
+    let allScans = [], currentPage = 1;
+
+    async function init() {
+      const user = getSession();
+      if (!user) { window.location.href = "../index.html"; return; }
+      if (user.role !== "admin") { window.location.href = "dashboard.html"; return; }
+
+      renderShell("nav-admin", "Admin Panel");
+      const body = document.getElementById("page-body");
+
+      body.innerHTML = `
+      <div class="page-heading">
+        <h2>🛡️ Admin Panel</h2>
+        <p>Platform-wide overview of all X-ray screenings</p>
+      </div>
+      <div style="background:linear-gradient(135deg,#fff1f2,#ffe4e6);border:1px solid #fca5a5;border-radius:var(--radius-sm);padding:12px 18px;display:flex;align-items:center;gap:10px;font-size:0.82rem;color:#991b1b;font-weight:500;margin-bottom:24px;">
+        <span>🔒</span>
+        <strong>Admin View:</strong>&nbsp; You can monitor scan activity but cannot access individual AI analysis reports — those are restricted to Doctors only.
+      </div>
+      <div class="stats-grid" id="admin-stats">
+        <div class="stat-card"><div class="stat-icon blue">📁</div><div><div class="stat-value" id="a-total">…</div><div class="stat-label">Total Scans</div></div></div>
+        <div class="stat-card"><div class="stat-icon red">🔴</div><div><div class="stat-value" id="a-high">…</div><div class="stat-label">High Risk</div></div></div>
+        <div class="stat-card"><div class="stat-icon amber">🟡</div><div><div class="stat-value" id="a-mod">…</div><div class="stat-label">Moderate Risk</div></div></div>
+        <div class="stat-card"><div class="stat-icon green">✅</div><div><div class="stat-value" id="a-low">…</div><div class="stat-label">Low Risk</div></div></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-icon">📋</span><h3>All Scans</h3></div>
+        <div class="card-body" style="padding:0">
+          <div id="admin-table-wrap">
+            <div class="spinner-wrap"><div class="spinner"></div><p>Loading all scans…</p></div>
+          </div>
+          <div class="pagination" id="admin-pagination"></div>
+        </div>
+      </div>
+    `;
+
+      try {
+        allScans = await getAllScans();
+        document.getElementById("a-total").textContent = allScans.length;
+        document.getElementById("a-high").textContent = allScans.filter(s => riskLevel(s.highestRisk) === "high").length;
+        document.getElementById("a-mod").textContent = allScans.filter(s => riskLevel(s.highestRisk) === "moderate").length;
+        document.getElementById("a-low").textContent = allScans.filter(s => riskLevel(s.highestRisk) === "low").length;
+        renderPage(1);
+      } catch (err) {
+        document.getElementById("admin-table-wrap").innerHTML =
+          `<div class="empty-state"><div class="empty-icon">⚠️</div><p>Could not load scans: ${err.message}</p></div>`;
+      }
+    }
+
+    function riskBadge(p) {
+      const rl = riskLevel(p);
+      const labels = { high: "HIGH", moderate: "MODERATE", low: "LOW" };
+      return `<span class="risk-badge risk-${rl}" style="font-size:0.75rem"><span class="risk-dot"></span>${labels[rl]}</span>`;
+    }
+
+    function renderPage(page) {
+      currentPage = page;
+      const start = (page - 1) * PAGE_SIZE, end = start + PAGE_SIZE;
+      const scans = allScans.slice(start, end);
+      const totalPages = Math.ceil(allScans.length / PAGE_SIZE);
+      const wrap = document.getElementById("admin-table-wrap");
+
+      if (!scans.length) {
+        wrap.innerHTML = `<div class="empty-state" style="padding:60px"><div class="empty-icon">📂</div><h3>No scans found</h3></div>`;
+        return;
+      }
+
+      wrap.innerHTML = `
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>#</th><th>Scan ID</th><th>User ID</th><th>Date</th><th>Highest Risk Disease</th><th>Risk Level</th>
+          </tr></thead>
+          <tbody>
+            ${scans.map((s, i) => `
+              <tr>
+                <td style="color:var(--text-muted);font-weight:600">${start + i + 1}</td>
+                <td style="font-family:monospace;font-size:0.78rem;color:var(--text-muted)">${(s.id || "—").slice(0, 14)}…</td>
+                <td style="font-family:monospace;font-size:0.78rem;color:var(--text-muted)">${(s.userId || "—").slice(0, 12)}…</td>
+                <td style="font-size:0.82rem">${fmtDate(s.createdAt)}</td>
+                <td><strong>${s.highestRiskDisease || "—"}</strong></td>
+                <td>${riskBadge(s.highestRisk || 0)}</td>
+              </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>`;
+
+      const pag = document.getElementById("admin-pagination");
+      if (totalPages <= 1) { pag.innerHTML = ""; return; }
+      pag.innerHTML = Array.from({ length: totalPages }, (_, i) =>
+        `<button class="page-btn ${i + 1 === page ? "active" : ""}" onclick="goPage(${i + 1})">${i + 1}</button>`
+      ).join("");
+    }
+
+    window.goPage = (p) => renderPage(p);
+    init();
+  </script>
+</body>
+
+</html>

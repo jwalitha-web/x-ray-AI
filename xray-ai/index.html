@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>X-Ray AI | Classified Screening Assistant</title>
+    <meta name="description" content="Secure, AI-powered chest X-ray screening for medical intelligence." />
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🫁</text></svg>" />
+    <style>
+        /* Landing page specifics using the new global theme tokens */
+        .hero {
+            position: relative;
+            background: radial-gradient(circle at center, #111827 0%, #050a14 100%);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .hero::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(0deg, rgba(5, 10, 20, 1) 0%, transparent 100%);
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 10;
+        }
+
+        .land-nav {
+            position: sticky;
+            top: 0;
+            background: rgba(5, 10, 20, 0.7);
+            backdrop-filter: blur(16px);
+            border-bottom: 1px solid var(--glass-border);
+            box-shadow: var(--glass-glow);
+            z-index: 100;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 4px;
+            color: var(--primary);
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 700;
+            margin-bottom: 24px;
+        }
+
+        .btn-large {
+            padding: 16px 40px;
+            font-size: 0.9rem;
+            letter-spacing: 2px;
+        }
+
+        .feature-grid-land {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 32px;
+            padding: 80px 48px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .stat-banner {
+            background: var(--navy-dark);
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            padding: 60px 0;
+            text-align: center;
+        }
+
+        .section-label {
+            font-size: 0.65rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 4px;
+            margin-bottom: 24px;
+            display: block;
+        }
+
+        .hero h1 {
+            font-size: clamp(2.5rem, 6vw, 4.5rem);
+            line-height: 1.1;
+            margin-bottom: 28px;
+            letter-spacing: -3px;
+        }
+
+        .hero p {
+            font-size: 1.05rem;
+            line-height: 1.8;
+            max-width: 640px;
+            margin: 0 auto 48px;
+            color: var(--text-muted);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="landing">
+        <!-- Navbar -->
+        <nav class="land-nav">
+            <div class="nav-brand"
+                style="display:flex;align-items:center;gap:12px;font-family:'JetBrains Mono', monospace;font-weight:700;letter-spacing:2px;text-transform:uppercase;font-size:0.8rem;">
+                <span style="font-size:20px;filter:drop-shadow(0 0 5px var(--primary-glow))">🫁</span> X-RAY AI
+            </div>
+            <div style="display:flex;gap:16px;">
+                <span
+                    style="font-size:0.75rem;color:var(--text-dim);font-family:'JetBrains Mono', monospace;text-transform:uppercase;letter-spacing:1px;align-self:center;">
+                    Operational Prototype v1.0.4
+                </span>
+            </div>
+        </nav>
+
+        <!-- Hero -->
+        <section class="hero">
+            <div class="hero-content">
+                <span class="hero-badge">Medical Intelligence Platform</span>
+                <h1 style="color:#fff;">Classified Chest X-Ray <br /><span
+                        style="color:var(--primary);text-shadow: 0 0 40px var(--primary-glow);">AI Screening
+                        Engine</span></h1>
+                <p>Advanced neural network for radiological intelligence. Real-time probabilistic screening for
+                    critical thoracic markers. Built for medical precision and uncompromising data sovereignty.</p>
+
+                <div style="display:flex;gap:16px;justify-content:center;margin-top:40px;flex-wrap:wrap;">
+                    <div>
+                        <button class="btn btn-blue btn-large" onclick="window.location.href='pages/dashboard.html'">
+                            ENTER COMMAND CENTER
+                        </button>
+                        <div
+                            style="margin-top:12px;font-family:'JetBrains Mono', monospace;font-size:0.6rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:2px;">
+                            Protocol Authorized · Guest Access Active
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features -->
+        <section style="padding:120px 0;background:var(--bg);">
+            <span class="section-label" style="text-align:center;">Capabilities & Operational Protocol</span>
+            <div class="feature-grid-land">
+                <div class="card"
+                    style="border-color:var(--glass-border); background: rgba(12, 20, 33, 0.5); box-shadow: var(--glass-glow);">
+                    <div class="card-body" style="padding: 40px 32px;">
+                        <div style="font-size:32px;margin-bottom:24px;opacity:0.6;">🔬</div>
+                        <h3>Neural Detection</h3>
+                        <p style="font-size:0.8rem;line-height:1.8;color:var(--text-muted);">Highly-trained deep
+                            learning classifiers
+                            optimized for subtle radiographic pattern recognition.</p>
+                    </div>
+                </div>
+                <div class="card"
+                    style="border-color:var(--glass-border); background: rgba(12, 20, 33, 0.5); box-shadow: var(--glass-glow);">
+                    <div class="card-body" style="padding: 40px 32px;">
+                        <div style="font-size:32px;margin-bottom:24px;opacity:0.6;">📊</div>
+                        <h3>Monochromatic Telemetry</h3>
+                        <p style="font-size:0.8rem;line-height:1.8;color:var(--text-muted);">High-fidelity visualization
+                            of condition
+                            probabilities using precise telemetry charts.</p>
+                    </div>
+                </div>
+                <div class="card"
+                    style="border-color:var(--glass-border); background: rgba(12, 20, 33, 0.5); box-shadow: var(--glass-glow);">
+                    <div class="card-body" style="padding: 40px 32px;">
+                        <div style="font-size:32px;margin-bottom:24px;opacity:0.6;">🛡️</div>
+                        <h3>Data Sovereignty</h3>
+                        <p style="font-size:0.8rem;line-height:1.8;color:var(--text-muted);">Role-based intelligence
+                            access. Exclusive
+                            verification protocols for licensed medical officers.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="stat-banner">
+            <h2 style="color:#fff;font-size:1.8rem;margin-bottom:12px;letter-spacing:-1px;">10 Radiographic Markers</h2>
+            <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:40px;">Classified conditions detected by
+                our AI Engine</p>
+            <div
+                style="display:flex;flex-wrap:wrap;justify-content:center;gap:12px;max-width:800px;margin:0 auto;opacity:0.7;">
+                <span class="disease-chip"
+                    style="background:rgba(255,255,255,0.03);border:1px solid var(--border);padding:8px 16px;border-radius:4px;font-size:0.75rem;letter-spacing:1px;text-transform:uppercase;">Pneumonia</span>
+                <span class="disease-chip"
+                    style="background:rgba(255,255,255,0.03);border:1px solid var(--border);padding:8px 16px;border-radius:4px;font-size:0.75rem;letter-spacing:1px;text-transform:uppercase;">Cardiomegaly</span>
+                <span class="disease-chip"
+                    style="background:rgba(255,255,255,0.03);border:1px solid var(--border);padding:8px 16px;border-radius:4px;font-size:0.75rem;letter-spacing:1px;text-transform:uppercase;">Effusion</span>
+                <span class="disease-chip"
+                    style="background:rgba(255,255,255,0.03);border:1px solid var(--border);padding:8px 16px;border-radius:4px;font-size:0.75rem;letter-spacing:1px;text-transform:uppercase;">Atelectasis</span>
+                <span class="disease-chip"
+                    style="background:rgba(255,255,255,0.03);border:1px solid var(--border);padding:8px 16px;border-radius:4px;font-size:0.75rem;letter-spacing:1px;text-transform:uppercase;">Nodule</span>
+                <span class="disease-chip"
+                    style="background:rgba(255,255,255,0.03);border:1px solid var(--border);padding:8px 16px;border-radius:4px;font-size:0.75rem;letter-spacing:1px;text-transform:uppercase;">Mass</span>
+                <span class="disease-chip"
+                    style="background:rgba(255,255,255,0.03);border:1px solid var(--border);padding:8px 16px;border-radius:4px;font-size:0.75rem;letter-spacing:1px;text-transform:uppercase;">Infiltration</span>
+                <span class="disease-chip"
+                    style="background:rgba(255,255,255,0.03);border:1px solid var(--border);padding:8px 16px;border-radius:4px;font-size:0.75rem;letter-spacing:1px;text-transform:uppercase;">Consolidation</span>
+            </div>
+        </section>
+
+        <section
+            style="padding:100px 48px;text-align:center;background:linear-gradient(rgba(5,10,20,0) 0%, rgba(59,130,246,0.03) 100%);">
+            <h2 style="color:#fff;margin-bottom:12px;text-transform:uppercase;letter-spacing:2px;font-size:1.4rem;">
+                Initiate Protocol</h2>
+            <p style="color:var(--text-muted);margin-bottom:32px;">Deploy the screening assistant to your clinical
+                workstation.</p>
+            <button class="btn btn-blue btn-large" onclick="window.location.href='pages/dashboard.html'">ENTER COMMAND
+                CENTER</button>
+        </section>
+
+        <footer
+            style="padding:40px;background:#030712;border-top:1px solid var(--border);text-align:center;font-size:0.65rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:2px;">
+            © 2026 X-RAY AI SCREENING ASSISTANT // CLASSIFIED CLINICAL UTILITY
+        </footer>
+    </div>
+
+    <script>
+        function navigate(href) { window.location.href = href; }
+        const sess = sessionStorage.getItem("xray_user");
+        if (sess) {
+            try {
+                const u = JSON.parse(sess);
+                if (u && u.uid) window.location.href = "pages/dashboard.html";
+            } catch { }
+        }
+    </script>
+</body>
+
+</html>
